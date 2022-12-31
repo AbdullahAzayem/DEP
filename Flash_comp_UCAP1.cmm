@@ -1,0 +1,240 @@
+;==============================================
+;   Switches
+;==============================================
+&flash_BM_SWE=                               0
+&flash_R7_BTLD_SWE=                          0
+&flash_R7_SWE1=                              1
+&flash_Cert6_Uboot_Only=                     0
+&flash_Uboot=                                0
+&flash_RootFs=                               0
+&flash_LinuxKernel=                          0
+&flash_LinuxDtb=                             0
+
+
+
+;==============================================
+; Files
+; please ADJUST the FILE PATHS correctly
+;==============================================
+&file_BM_SWE=           "D:\BMW_project\UCAP\Hossam\T32\production.bin"
+&file_R7_BTLD_SWE=      "../proj1808_ucap_source/SWE_generation_script/input_images/M3N/RPU/BMW_UCAP.bin"
+&file_R7_SWE1=          "C:\Data\ValeoProjects\PROJECTS_REPOS\proj6020_ecu4_pipp\Build\STLA_CVADAS.bin"
+&file_Cert6_Uboot_Only= "C:/Users/nhussein/Downloads/btld-swe.bin"
+&file_Uboot=            "./Application-framework-SWE-flash-image.bin"
+&file_RootFs=           "./valeo-image-minimal-valeo-r8a77965-ucap.ext4.gz.u-boot"
+&file_LinuxKernel=      "./Image-valeo-r8a77965-ucap.bin"
+&file_LinuxDtb=         "./Image-valeo-r8a77965-ucap.dtb"
+
+
+
+
+;==============================================
+; Flash addresses
+;==============================================
+&address_BM_SWE=                       0x0
+&address_R7_BTLD_SWE=                  0x00440000
+&address_R7_SWE1=                      0x00440000
+&address_Cert6_Uboot_Only=             0x00140000      
+&address_Uboot=                        0x520000
+&address_RootFs=                       0x1E40000
+&address_LinuxKernel=                  0xC40000
+&address_LinuxDtb=                     0xBC0000
+
+&address_ERASE_END=                    0x5FFFFF
+
+RESet
+SYStem.RESet
+SYStem.option.EnReset OFF
+
+SYStem.CPU RCARM3N-CR7
+SYSTem.Option DisMode ARM
+SYStem.MemAccess DAP
+SYStem.JtagClock CTCK 10MHz
+
+ ;Activate Cortex-R7
+SYStem.Mode Prepare
+
+DO C:/T32/demo/arm/hardware/r_carm3/scripts/kick_cores "R7"
+Trace.DISable
+SYStem.Up
+SYStem.option.EnReset ON
+&BASE=0xEE200000
+
+; --------------------------------------------------------------------------------
+; enable the SRAM & MPU - alternative execute BootROM e.g. Go/Wait/Break
+IF TRUE()
+(
+  ; enable SRAM
+  Data.Set AD:0xE67F0018 %LE %Long 0x1
+  ; disable MPU
+  Data.Set C15:0x1 %Long 0xC50078
+  ; disable all regions
+  PRIVATE &i
+  &i=0
+  RePeaT 16.
+  (
+    ; set MRNR
+    Data.Set C15:0x26 %Long &i
+    ; clear RSER
+    Data.Set C15:0x216 %Long 0x0
+    &i=&i+1.
+  )
+  ; setup regions for simplicity only region 0&1
+  ; region 0: 0x00000000--0xffffffff - Shareable Device - all permissions
+  Data.Set C15:0x26 %Long 0x0
+  Data.Set C15:0x16 %Long 0x0
+  Data.Set C15:0x216 %Long 0x3f
+  Data.Set C15:0x416 %Long 0x305
+  ; region 1: 0xe6300000--0xe637ffff - non-cacheable    - all permissions
+  Data.Set C15:0x26 %Long 0x1
+  Data.Set C15:0x16 %Long 0xe6300000
+  Data.Set C15:0x216 %Long 0x25
+  Data.Set C15:0x416 %Long 0x30c
+
+  ; enable MPU
+  Data.Set C15:0x1 %Long Data.Long(C15:0x1)|0x1
+)
+ELSE
+(
+  Go.direct 0x268
+  WAIT !STATE.RUN() 0.2s
+  IF STATE.RUN()
+    Break.direct
+)
+
+//Enable RPC PowerON & Clock
+Data.Set A:0xE6150900 %LE %Long ~(0x3F1E017)
+Data.Set A:0xE6150994 %LE %Long   0x3F1E017    ;  Module STOP register, BIT17 RPC
+
+Data.Set A:0xE6150900 %LE %Long ~(0x13)
+Data.Set A:0xE6150238 %LE %Long   0x13       ;80Mhz, 0x17=40Mhz
+
+//FLASH READ ID TEST
+ AREA.CLEAR
+ AREA.view
+ GOSUB READ_ID_TEST
+
+ Break.RESet
+
+ FLASHFILE.RESet
+
+//FLASHFILE.CONFIG <RPC Base Address>
+  FLASHFILE.CONFIG &BASE
+
+//FLASHFILE.TARGET <code range>       <data range>        <Algorithm file>
+  FLASHFILE.TARGET 0xE6328000++0x1FFF 0xE632A000++0x21FF  ~~/demo/arm/flash/word/hyper256_shrpc.bin   /KEEP
+
+//Read FLASH Manufacture and Device ID
+  FLASHFILE.GETID
+
+;FLASHFILE.ERASE 0++&address_ERASE_END
+
+;========================================
+;  Actual flashing
+;========================================  
+IF &flash_BM_SWE==1
+(
+  GOSUB me_flash_file &file_BM_SWE &address_BM_SWE
+)
+
+IF &flash_R7_BTLD_SWE==1
+(
+  GOSUB me_flash_file &file_R7_BTLD_SWE &address_R7_BTLD_SWE
+)
+ 
+IF &flash_R7_SWE1==1
+(
+  GOSUB me_flash_file &file_R7_SWE1 &address_R7_SWE1
+)
+ 
+IF &flash_Cert6_Uboot_Only==1
+(
+  GOSUB me_flash_file &file_Cert6_Uboot_Only &address_Cert6_Uboot_Only
+)
+ 
+IF &flash_Uboot==1
+(
+  GOSUB me_flash_file &file_Uboot &address_Uboot
+)
+
+IF &flash_RootFs==1
+(
+  GOSUB me_flash_file &file_RootFs &address_RootFs
+)
+IF &flash_LinuxKernel==1
+(
+  GOSUB me_flash_file &file_LinuxKernel &address_LinuxKernel
+)
+IF &flash_LinuxDtb==1
+(
+  GOSUB me_flash_file &file_LinuxDtb &address_LinuxDtb
+)
+FLASHFILE.DUMP 0x100000
+;FLASHFILE.DUMP 0x120000
+
+;do rcarm3n_layout.cmm
+
+
+TrOnchip.Set RESET.OFF
+
+
+ENDDO
+
+
+READ_ID_TEST:
+(
+  &backup_cmncr=Data.Long(A:0xee200000)
+
+  Data.Set A:0xee20007C %Long 0x80000263  ;physical calibration.
+  Data.Set A:0xee200000 %Long 0x81fff301
+  Data.Set A:0xee200024 %Long 0x0  ;write memory
+  Data.Set A:0xee200028 %Long 0x555
+  Data.Set A:0xee20002C %Long 0x0
+  Data.Set A:0xee200064 %Long 0x5101
+  Data.Set A:0xee200030 %Long 0xA2225408
+  Data.Set A:0xee200040 %Long 0xF0000000  ; Reset(0xF0)
+  Data.Set A:0xee200020 %Long 0x3  ;write access
+
+  Data.Set A:0xee20007C %Long 0x80000263  ;physical calibration.
+  Data.Set A:0xee200000 %Long 0x81fff301
+  Data.Set A:0xee200024 %Long 0x0  ;write memory
+  Data.Set A:0xee200028 %Long 0x555
+  Data.Set A:0xee20002C %Long 0x0
+  Data.Set A:0xee200064 %Long 0x5101
+  Data.Set A:0xee200030 %Long 0xA2225408
+  Data.Set A:0xee200040 %Long 0x98000000 ; CFI Enter(0x98)
+  Data.Set A:0xee200020 %Long 0x3  ;write access
+
+  Data.Set A:0xee20007C %Long 0x80000263 ;physical calibration.
+  Data.Set A:0xee200000 %Long 0x81fff301
+  Data.Set A:0xee200024 %Long 0x00800000 ;read memory
+  Data.Set A:0xee200028 %Long 0x0  ;addr
+  Data.Set A:0xee20002C %Long 0x0
+  Data.Set A:0xee200060 %Long 0xE  ;dummy cycle
+  Data.Set A:0xee200064 %Long 0x5101
+  Data.Set A:0xee200030 %Long 0xA222D40C ; 32bit read with dummy cycle
+  Data.Set A:0xee200020 %Long 0x5  ;read access
+
+  WAIT 10.ms
+  //print "read_buffer[31:0]: 0x" data.long(A:0xee200038)
+  &temp=Data.Long(A:0xee200038)
+  PRINT "Read 1st: 0x" (&temp>>8.)&0xFF  " (Manufacture)"
+  PRINT "Read 2nd: 0x" (&temp>>24.)&0xFF  " (Device ID)"
+
+  Data.Set A:0xee200000 %Long &backup_cmncr
+
+  RETURN
+)
+
+
+me_flash_file:
+(
+  ENTRY &file &address
+  &size=OS.FILE.SIZE(&file)
+  PRINT "Flashing " OS.FILE.NAME(&file)
+  PRINT "Size " &size
+  FLASHFILE.ERASE &address++(&size-1)
+  FLASHFILE.LOAD.binary &file &address
+
+  RETURN
+)

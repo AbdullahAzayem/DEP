@@ -1,0 +1,30 @@
+system.cpu rcarm3n-cr7
+system.option.DisMode.arm
+data.load.auto "C:\Data\ValeoProjects\PROJECTS_REPOS\proj6020_ecu4_pipp\Build\STLA_CVADAS.elf" /nocode
+System.Memaccess.DAP
+VAR.WATCH %e %SPOTLIGHT %INDEX %HEX
+
+B::Var.AddWatch apuh_admintable
+B::Var.AddWatch apuh_rtdadmintable
+B::Var.AddWatch EgoModelAdmin
+B::Var.AddWatch apuh_StreamAdmin
+B::Var.AddWatch apuh_DiagAdmin
+
+
+B::Var.AddWatch Rte_CONF_PpSrCodingInterfaces_S_CodingCfgInput
+B::Var.AddWatch st_dapm_uls_intern_data.state_data.state_obj.safety_flag
+B::Var.AddWatch apuh_ConfDataAdminTable.IsConfDataWritten
+B::Var.AddWatch ufm.map_input.uls_features.num_features
+B::Var.AddWatch TLMV_intvmeas
+B::Var.AddWatch TLMV_threadLoads
+
+B::Var.AddWatch DebugIccom_Status
+B::Var.AddWatch apuh_DTCadmin
+B::Var.AddWatch safeCoding_StateID
+B::Var.AddWatch Rte_ERRH_PpSrErrorMonitoring_DeCoding
+
+
+system.attach
+system.attach
+system.attach
+system.attach
